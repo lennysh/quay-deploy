@@ -91,9 +91,6 @@ cat << EOF > "$SERVICE_DIR/quay-quay.container"
 Description=Quay Container Registry
 RequiresMountsFor=$ABS_QUAY_DIR
 Wants=network-online.target
-#
-# --- FIX: Changed service names ---
-#
 After=network-online.target quay-postgres.service quay-redis.service
 BindsTo=quay-postgres.service quay-redis.service
 
@@ -117,9 +114,6 @@ info "Reloading systemd user daemon..."
 systemctl --user daemon-reload
 
 info "Enabling 'quay-quay.service' to start on boot..."
-#
-# --- FIX: Changed service name ---
-#
 systemctl --user enable --now quay-quay.service
 
 echo
@@ -134,5 +128,6 @@ echo
 echo "Your 'start.sh' script is no longer needed. Use systemctl to manage your services:"
 echo "   systemctl --user status quay-quay.service"
 echo "   systemctl --user stop quay-quay.service"
-echo "   systemctl --user start quay-quay.service"
+Failure:
+"   systemctl --user start quay-quay.service"
 echo
