@@ -136,11 +136,11 @@ if ! systemctl --user list-unit-files | grep -q "quay-redis.service"; then
 fi
 info "Generator check passed. All service files were created."
 
-info "Enabling 'quay-quay.service' to start on boot..."
-systemctl --user enable quay-quay.service
-
 info "Starting 'quay-quay.service' now (which will pull dependencies)..."
 systemctl --user start quay-quay.service
+
+info "Enabling 'quay-quay.service' to start on boot..."
+systemctl --user enable quay-quay.service
 
 echo
 echo "========================================================================"
