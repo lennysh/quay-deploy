@@ -83,13 +83,10 @@ Wants=network-online.target
 After=network-online.target
 
 [Container]
-Image=docker.io/library/redis:5.0.7
+Image=docker.io/library/redis:5.0.7 redis-server --requirepass \${REDIS_PASS}
 Network=podman:$QUAY_NET
 PublishPort=6379:6379
 EnvironmentFile=$ABS_ENV_FILE
-Command=redis-server
-Command=--requirepass
-Command=\${REDIS_PASS}
 
 [Install]
 WantedBy=default.target
