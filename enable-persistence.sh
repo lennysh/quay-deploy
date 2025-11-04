@@ -87,7 +87,7 @@ Image=docker.io/library/redis:5.0.7
 Network=podman:$QUAY_NET
 PublishPort=6379:6379
 EnvironmentFile=$ABS_ENV_FILE
-PodmanArgs=redis-server --requirepass \${REDIS_PASS}
+Exec=redis-server --requirepass \${REDIS_PASS}
 
 [Install]
 WantedBy=default.target
