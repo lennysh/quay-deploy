@@ -127,7 +127,10 @@ fi
 info "Generator check passed. Service file 'quay-quay.service' was created."
 
 info "Enabling 'quay-quay.service' to start on boot..."
-systemctl --user enable --now quay-quay.service
+systemctl --user enable quay-quay.service
+
+info "Starting 'quay-quay.service' now..."
+systemctl --user start quay-quay.service
 
 echo
 echo "========================================================================"
