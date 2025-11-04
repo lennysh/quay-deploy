@@ -75,7 +75,6 @@ EOF
 
 # --- Create quay-redis.container ---
 info "Generating Quadlet file: quay-redis.container"
-
 cat << EOF > "$SERVICE_DIR/quay-redis.container"
 [Unit]
 Description=Quay Redis Cache
@@ -87,6 +86,7 @@ Image=docker.io/library/redis:5.0.7
 Network=podman:$QUAY_NET
 PublishPort=6379:6379
 EnvironmentFile=$ABS_ENV_FILE
+# Use 'Exec=' for the container command
 Exec=redis-server --requirepass \${REDIS_PASS}
 
 [Install]
@@ -96,7 +96,6 @@ EOF
 
 # --- Create quay-quay.container ---
 info "Generating Quadlet file: quay-quay.container"
-
 cat << EOF > "$SERVICE_DIR/quay-quay.container"
 [Unit]
 Description=Quay Container Registry
@@ -137,11 +136,11 @@ if ! systemctl --user list-unit-files | grep -q "quay-redis.service"; then
 fi
 info "Generator check passed. All service files were created."
 
-info "Starting 'quay-quay.service' now (which will pull dependencies)..."
-systemctl --user start quay-quay.service
-
 info "Enabling 'quay-quay.service' to start on boot..."
 systemctl --user enable quay-quay.service
+
+info "Starting 'quay-quay.service' now (which will pull dependencies)..."
+systemctl --user start quay-quay.service
 
 echo
 echo "========================================================================"
