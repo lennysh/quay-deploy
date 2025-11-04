@@ -85,7 +85,9 @@ Image=redis:5.0.7
 Network=podman:$QUAY_NET
 PublishPort=6379:6379
 EnvironmentFile=$ABS_ENV_FILE
-Command=redis-server --requirepass \${REDIS_PASS}
+Command=redis-server
+Command=--requirepass
+Command=\${REDIS_PASS}
 
 [Install]
 WantedBy=default.target
@@ -107,7 +109,7 @@ PublishPort=8080:8080
 EnvironmentFile=$ABS_ENV_FILE
 Volume=$ABS_QUAY_DIR/config:/conf/stack:Z
 Volume=$ABS_QUAY_DIR/storage:/datastorage:Z
-Privileged=true
+PodmanArgs=--privileged
 
 [Install]
 WantedBy=default.target
@@ -119,7 +121,6 @@ systemctl --user daemon-reload
 sleep 1 # Give systemd a moment to process generators
 
 info "Checking if generator created the service file..."
-# The generated files live in a different directory. We check if systemd *knows* about it.
 if ! systemctl --user list-unit-files | grep -q "quay-quay.service"; then
     fatal "systemd generator FAILED to create quay-quay.service. Check 'journalctl --user -xe' for errors."
 fi
