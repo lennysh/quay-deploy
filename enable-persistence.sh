@@ -44,12 +44,20 @@ SERVICE_DIR="$HOME/.config/systemd/user"
 info "Creating systemd user directory at $SERVICE_DIR..."
 mkdir -p "$SERVICE_DIR"
 
+# --- Ensure the podman network exists (Good Practice) ---
+info "Ensuring podman network '$QUAY_NET' exists..."
+if ! podman network exists "$QUAY_NET"; then
+    podman network create "$QUAY_NET"
+    info "Network '$QUAY_NET' created."
+else
+    info "Network '$QUAY_NET' already exists."
+fi
+
 # --- Create quay-postgres.container ---
 info "Generating Quadlet file: quay-postgres.container"
 cat << EOF > "$SERVICE_DIR/quay-postgres.container"
 [Unit]
 Description=Quay Postgresql Database
-RequiresMountsFor=$ABS_QUAY_DIR/postgres
 Wants=network-online.target
 After=network-online.target
 
@@ -77,7 +85,6 @@ Image=redis:5.0.7
 Network=podman:$QUAY_NET
 PublishPort=6379:6379
 EnvironmentFile=$ABS_ENV_FILE
-# We pass the password via an env var from the file
 Command=redis-server --requirepass \${REDIS_PASS}
 
 [Install]
@@ -89,7 +96,6 @@ info "Generating Quadlet file: quay-quay.container"
 cat << EOF > "$SERVICE_DIR/quay-quay.container"
 [Unit]
 Description=Quay Container Registry
-RequiresMountsFor=$ABS_QUAY_DIR
 Wants=network-online.target
 After=network-online.target quay-postgres.service quay-redis.service
 BindsTo=quay-postgres.service quay-redis.service
@@ -104,14 +110,20 @@ Volume=$ABS_QUAY_DIR/storage:/datastorage:Z
 Privileged=true
 
 [Install]
-# This is the main service we will enable.
-# systemd will automatically start its dependencies (postgres, redis)
 WantedBy=default.target
 EOF
 
 # --- Enable Services ---
 info "Reloading systemd user daemon..."
 systemctl --user daemon-reload
+sleep 1 # Give systemd a moment to process generators
+
+info "Checking if generator created the service file..."
+# The generated files live in a different directory. We check if systemd *knows* about it.
+if ! systemctl --user list-unit-files | grep -q "quay-quay.service"; then
+    fatal "systemd generator FAILED to create quay-quay.service. Check 'journalctl --user -xeu systemd-xdg-autostart-generator' for errors."
+fi
+info "Generator check passed. Service file 'quay-quay.service' was created."
 
 info "Enabling 'quay-quay.service' to start on boot..."
 systemctl --user enable --now quay-quay.service
@@ -128,6 +140,5 @@ echo
 echo "Your 'start.sh' script is no longer needed. Use systemctl to manage your services:"
 echo "   systemctl --user status quay-quay.service"
 echo "   systemctl --user stop quay-quay.service"
-Failure:
-"   systemctl --user start quay-quay.service"
+echo "   systemctl --user start quay-quay.service"
 echo
