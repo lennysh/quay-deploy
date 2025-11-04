@@ -1,0 +1,135 @@
+#!/bin/bash
+#
+# This script enables persistence (start on reboot) for the Quay containers
+# by generating and enabling systemd Quadlet files.
+#
+# This script should only be run ONCE.
+#
+
+# --- Script Setup ---
+set -e
+set -u
+set -o pipefail
+
+# --- Source Configuration ---
+# Find the directory where this script is located
+SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
+ENV_FILE="$SCRIPT_DIR/quay.env"
+
+if [ -f "$ENV_FILE" ]; then
+    # Sourcing the .env file to load variables
+    source "$ENV_FILE"
+    # Get the absolute path to the env file for systemd
+    ABS_ENV_FILE=$(readlink -f "$ENV_FILE")
+    # Get the absolute path to the data directory for systemd
+    ABS_QUAY_DIR=$(readlink -f "$QUAY")
+else
+    echo "❌ FATAL: Configuration file not found at: $ENV_FILE" >&2
+    echo "Please create quay.env in the same directory as this script." >&2
+    exit 1
+fi
+
+# --- Helper Functions ---
+info() {
+    echo "✅ INFO: $1"
+}
+
+fatal() {
+    echo "❌ FATAL: $1" >&2
+    exit 1
+}
+
+# --- Main ---
+SERVICE_DIR="$HOME/.config/systemd/user"
+info "Creating systemd user directory at $SERVICE_DIR..."
+mkdir -p "$SERVICE_DIR"
+
+# --- Create quay-postgres.container ---
+info "Generating Quadlet file: quay-postgres.container"
+cat << EOF > "$SERVICE_DIR/quay-postgres.container"
+[Unit]
+Description=Quay Postgresql Database
+RequiresMountsFor=$ABS_QUAY_DIR/postgres
+Wants=network-online.target
+After=network-online.target
+
+[Container]
+Image=postgres:$PG_VERSION
+Network=podman:$QUAY_NET
+PublishPort=5432:5432
+EnvironmentFile=$ABS_ENV_FILE
+Volume=$ABS_QUAY_DIR/postgres:/var/lib/postgresql/data:Z
+
+[Install]
+WantedBy=default.target
+EOF
+
+# --- Create quay-redis.container ---
+info "Generating Quadlet file: quay-redis.container"
+cat << EOF > "$SERVICE_DIR/quay-redis.container"
+[Unit]
+Description=Quay Redis Cache
+Wants=network-online.target
+After=network-online.target
+
+[Container]
+Image=redis:5.0.7
+Network=podman:$QUAY_NET
+PublishPort=6379:6379
+EnvironmentFile=$ABS_ENV_FILE
+# We pass the password via an env var from the file
+Command=redis-server --requirepass \${REDIS_PASS}
+
+[Install]
+WantedBy=default.target
+EOF
+
+# --- Create quay-quay.container ---
+info "Generating Quadlet file: quay-quay.container"
+cat << EOF > "$SERVICE_DIR/quay-quay.container"
+[Unit]
+Description=Quay Container Registry
+RequiresMountsFor=$ABS_QUAY_DIR
+Wants=network-online.target
+# This is the dependency magic:
+After=network-online.target container-quay-postgres.service container-quay-redis.service
+BindsTo=container-quay-postgres.service container-quay-redis.service
+
+[Container]
+Image=quay.io/projectquay/quay:latest
+Network=podman:$QUAY_NET
+PublishPort=8080:8080
+EnvironmentFile=$ABS_ENV_FILE
+Volume=$ABS_QUAY_DIR/config:/conf/stack:Z
+Volume=$ABS_QUAY_DIR/storage:/datastorage:Z
+Privileged=true
+
+[Install]
+# This is the main service we will enable.
+# systemd will automatically start its dependencies (postgres, redis)
+WantedBy=default.target
+EOF
+
+# --- Enable Services ---
+info "Reloading systemd user daemon..."
+systemctl --user daemon-reload
+
+info "Enabling 'quay-quay.service' to start on boot..."
+# This enables the main service. The others are pulled in as dependencies.
+systemctl --user enable --now container-quay-quay.service
+
+echo
+echo "========================================================================"
+echo "  🎉 SUCCESS: Persistence is enabled via Quadlets! 🎉"
+echo "========================================================================"
+echo
+echo "To allow your services to start at boot (even when you're logged out),"
+echo "you MUST run this command ONE time:"
+echo
+echo "   loginctl enable-linger $(whoami)"
+echo
+echo "Your 'start.sh' script is no longer needed. Use systemctl to manage your services:"
+echo "   systemctl --user status container-quay-quay.service"
+echo "   systemctl --user stop container-quay-quay.service"
+echo "   systemctl --user start container-quay-quay.service"
+echo
