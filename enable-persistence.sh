@@ -91,9 +91,11 @@ cat << EOF > "$SERVICE_DIR/quay-quay.container"
 Description=Quay Container Registry
 RequiresMountsFor=$ABS_QUAY_DIR
 Wants=network-online.target
-# This is the dependency magic:
-After=network-online.target container-quay-postgres.service container-quay-redis.service
-BindsTo=container-quay-postgres.service container-quay-redis.service
+#
+# --- FIX: Changed service names ---
+#
+After=network-online.target quay-postgres.service quay-redis.service
+BindsTo=quay-postgres.service quay-redis.service
 
 [Container]
 Image=quay.io/projectquay/quay:latest
@@ -115,21 +117,22 @@ info "Reloading systemd user daemon..."
 systemctl --user daemon-reload
 
 info "Enabling 'quay-quay.service' to start on boot..."
-# This enables the main service. The others are pulled in as dependencies.
-systemctl --user enable --now container-quay-quay.service
+#
+# --- FIX: Changed service name ---
+#
+systemctl --user enable --now quay-quay.service
 
 echo
 echo "========================================================================"
 echo "  🎉 SUCCESS: Persistence is enabled via Quadlets! 🎉"
 echo "========================================================================"
 echo
-echo "To allow your services to start at boot (even when you're logged out),"
-echo "you MUST run this command ONE time:"
+echo "If you have not already, run this command ONCE to enable start at boot:"
 echo
 echo "   loginctl enable-linger $(whoami)"
 echo
 echo "Your 'start.sh' script is no longer needed. Use systemctl to manage your services:"
-echo "   systemctl --user status container-quay-quay.service"
-echo "   systemctl --user stop container-quay-quay.service"
-echo "   systemctl --user start container-quay-quay.service"
+echo "   systemctl --user status quay-quay.service"
+echo "   systemctl --user stop quay-quay.service"
+echo "   systemctl --user start quay-quay.service"
 echo
