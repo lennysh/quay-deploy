@@ -40,8 +40,8 @@ fatal() {
 }
 
 # --- Main ---
-SERVICE_DIR="$HOME/.config/systemd/user"
-info "Creating systemd user directory at $SERVICE_DIR..."
+SERVICE_DIR="$HOME/.config/containers/systemd"
+info "Creating Quadlet directory at $SERVICE_DIR..."
 mkdir -p "$SERVICE_DIR"
 
 # --- Ensure the podman network exists (Good Practice) ---
@@ -121,7 +121,7 @@ sleep 1 # Give systemd a moment to process generators
 info "Checking if generator created the service file..."
 # The generated files live in a different directory. We check if systemd *knows* about it.
 if ! systemctl --user list-unit-files | grep -q "quay-quay.service"; then
-    fatal "systemd generator FAILED to create quay-quay.service. Check 'journalctl --user -xeu systemd-xdg-autostart-generator' for errors."
+    fatal "systemd generator FAILED to create quay-quay.service. Check 'journalctl --user -xe' for errors."
 fi
 info "Generator check passed. Service file 'quay-quay.service' was created."
 
