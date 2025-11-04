@@ -83,10 +83,11 @@ Wants=network-online.target
 After=network-online.target
 
 [Container]
-Image=docker.io/library/redis:5.0.7 redis-server --requirepass \${REDIS_PASS}
+Image=docker.io/library/redis:5.0.7
 Network=podman:$QUAY_NET
 PublishPort=6379:6379
 EnvironmentFile=$ABS_ENV_FILE
+PodmanArgs=redis-server --requirepass \${REDIS_PASS}
 
 [Install]
 WantedBy=default.target
@@ -124,6 +125,7 @@ info "Waiting for generators to complete..."
 sleep 2 # Give systemd a moment to process generators
 
 info "Checking if generator created the service files..."
+# Check for ALL THREE services
 if ! systemctl --user list-unit-files | grep -q "quay-quay.service"; then
     fatal "systemd generator FAILED to create quay-quay.service."
 fi
