@@ -62,7 +62,7 @@ Wants=network-online.target
 After=network-online.target
 
 [Container]
-Image=postgres:$PG_VERSION
+Image=docker.io/library/postgres:$PG_VERSION
 Network=podman:$QUAY_NET
 PublishPort=5432:5432
 EnvironmentFile=$ABS_ENV_FILE
@@ -72,8 +72,10 @@ Volume=$ABS_QUAY_DIR/postgres:/var/lib/postgresql/data:Z
 WantedBy=default.target
 EOF
 
+
 # --- Create quay-redis.container ---
 info "Generating Quadlet file: quay-redis.container"
+
 cat << EOF > "$SERVICE_DIR/quay-redis.container"
 [Unit]
 Description=Quay Redis Cache
@@ -81,7 +83,7 @@ Wants=network-online.target
 After=network-online.target
 
 [Container]
-Image=redis:5.0.7
+Image=docker.io/library/redis:5.0.7
 Network=podman:$QUAY_NET
 PublishPort=6379:6379
 EnvironmentFile=$ABS_ENV_FILE
@@ -93,8 +95,10 @@ Command=\${REDIS_PASS}
 WantedBy=default.target
 EOF
 
+
 # --- Create quay-quay.container ---
 info "Generating Quadlet file: quay-quay.container"
+
 cat << EOF > "$SERVICE_DIR/quay-quay.container"
 [Unit]
 Description=Quay Container Registry
@@ -115,18 +119,26 @@ PodmanArgs=--privileged
 WantedBy=default.target
 EOF
 
+
 # --- Enable Services ---
 info "Reloading systemd user daemon..."
 systemctl --user daemon-reload
-sleep 1 # Give systemd a moment to process generators
+info "Waiting for generators to complete..."
+sleep 2 # Give systemd a moment to process generators
 
-info "Checking if generator created the service file..."
+info "Checking if generator created the service files..."
 if ! systemctl --user list-unit-files | grep -q "quay-quay.service"; then
-    fatal "systemd generator FAILED to create quay-quay.service. Check 'journalctl --user -xe' for errors."
+    fatal "systemd generator FAILED to create quay-quay.service."
 fi
-info "Generator check passed. Service file 'quay-quay.service' was created."
+if ! systemctl --user list-unit-files | grep -q "quay-postgres.service"; then
+    fatal "systemd generator FAILED to create quay-postgres.service."
+fi
+if ! systemctl --user list-unit-files | grep -q "quay-redis.service"; then
+    fatal "systemd generator FAILED to create quay-redis.service."
+fi
+info "Generator check passed. All service files were created."
 
-info "Starting 'quay-quay.service' now..."
+info "Starting 'quay-quay.service' now (which will pull dependencies)..."
 systemctl --user start quay-quay.service
 
 info "Enabling 'quay-quay.service' to start on boot..."
