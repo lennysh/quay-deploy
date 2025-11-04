@@ -73,7 +73,7 @@ main() {
     fi
 
     info "Starting PostgreSQL container..."
-    podman run -d --rm --name postgresql \
+    podman run -d --name postgresql \
         --replace \
         --network "$QUAY_NET" \
         -e POSTGRES_USER=$PG_USER \
@@ -84,7 +84,7 @@ main() {
         "postgres:$PG_VERSION"
 
     info "Starting Redis container..."
-    podman run -d --rm --name redis \
+    podman run -d --name redis \
         --replace \
         --network "$QUAY_NET" \
         -p 6379:6379 \
@@ -108,7 +108,7 @@ main() {
 
     # --- Part 3: Start Quay ---
     info "Starting the main Quay registry container..."
-    podman run --rm -p 8080:8080 \
+    podman run -p 8080:8080 \
         --name=quay \
         --replace \
         --network "$QUAY_NET" \
