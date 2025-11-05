@@ -245,7 +245,6 @@ PublishPort=8080:8080
 EnvironmentFile=$ABS_ENV_FILE
 Volume=$ABS_QUAY_DIR/config:/conf/stack:Z
 Volume=$ABS_QUAY_DIR/storage:/datastorage:Z
-PodmanArgs=--privileged
 
 [Install]
 WantedBy=default.target
