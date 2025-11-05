@@ -4,13 +4,14 @@ This repository provides a set of shell scripts to automate the deployment of a 
 
 It automatically sets up Quay with dependent Postgres and Redis containers, runs them on a dedicated network, and applies necessary patches to the configuration for compatibility with modern Postgres versions.
 
-This setup is based on the original Quay Podman guide but is fully automated and configured to run rootlessly.
+This setup is designed to be persistent using **systemd Quadlets**.
 
 ## Features
 
 * **Rootless:** Runs entirely as a non-root user using Podman.
-* **Automated:** Sets up Postgres (v15), Redis, and Quay.
-* **Patched:** Automatically removes incompatible settings from the generated `config.yaml` (e.g., `keepalivescount`, `keepalivesidle`) that cause errors with modern Postgres.
+* **Persistent:** Uses `systemd` Quadlets to manage services and start them on boot.
+* **Single-Script Install:** A single script handles environment prep, dependency startup, and the main Quay installation.
+* **Patched:** Automatically removes incompatible settings from the generated `config.yaml` (e.g., `keepalivescount`, `keepalivesidle`).
 * **Networked:** Creates a dedicated `quay-net` podman network for clean container communication using hostnames (`postgresql`, `redis`).
 * **Separated Config:** All user-configurable variables (passwords, paths) are stored in `quay.env`.
 
@@ -20,7 +21,7 @@ Before you begin, ensure you have the following tools installed:
 * `podman`
 * `sed`
 
-## 1. Initial Setup & Installation
+## Installation
 
 1.  **Clone the Repository**
     ```bash
@@ -29,81 +30,71 @@ Before you begin, ensure you have the following tools installed:
     ```
 
 2.  **Configure Passwords**
-    The `quay.env` file holds all your configuration. You **must** edit this file and set your own passwords.
-
+    Copy the example config and edit it to set your passwords.
     ```bash
-    # Edit the file with your preferred editor
+    cp quay.env.example quay.env
     nano quay.env
     ```
-
-    Inside `quay.env`, replace both `REPLACEME` values for `PG_PASS` and `REDIS_PASS` with strong, unique passwords.
+    Inside `quay.env`, replace both `REPLACEME` values for `PG_PASS` and `REDIS_PASS`.
 
 3.  **Make Scripts Executable**
     ```bash
-    chmod +x install.sh start.sh
+    chmod +x install-persistent.sh uninstall.sh
     ```
 
 4.  **Run the Installation Script**
-    This script will set up directories, start the database and cache, and then pause for the manual Quay configuration.
-
+    This is the only script you need to run for setup. It will install and enable all persistent services.
     ```bash
-    ./install.sh
+    ./install-persistent.sh
     ```
 
 5.  **Follow the MANUAL ACTION REQUIRED**
-    The `install.sh` script will pause and prompt you to perform the web UI setup. **Follow these on-screen instructions exactly.**
+    The script will pause and prompt you to perform the web UI setup. **Follow these on-screen instructions exactly.**
 
     You will be asked to:
-    * **Run a `podman run ...` command** in a **separate terminal** to start the config tool.
+    * **Run a `podman run ...` command** in a **separate terminal** to start the config tool. (Hostnames will work now because the `postgres` and `redis` services are already running).
     * **Open `http://localhost:8080`** in your browser.
     * **Log in** with `quayconfig` / `secret`.
-    * **Enter Database Settings:**
+    * **Enter Database Settings (Use Hostnames):**
         * Host: `postgresql`
         * User: `quay` (or your value from `PG_USER`)
         * Password: (Your password from `PG_PASS`)
         * Database: `quay` (or your value from `PG_DB`)
-    * **Enter Redis Settings:**
+    * **Enter Redis Settings (Use Hostnames):**
         * Hostname: `redis`
         * Password: (Your password from `REDIS_PASS`)
     * **Create your Super User** account.
     * **Download the `quay-config.tar.gz` file** and save it to the *exact path* shown in the script's output (e.g., `/home/user/quay-deploy/config/quay-config.tar.gz`).
     * **Stop the config container** (Ctrl+C) in your second terminal.
-    * **Press [Enter]** in the original `install.sh` terminal.
+    * **Press [Enter]** in the original `install-persistent.sh` terminal.
 
-The script will then automatically unpack, patch, and start your Quay registry.
+6.  **Enable Linger (One Time Only)**
+    After the script succeeds, run the command it gives you to allow your services to start at boot:
+    ```bash
+    loginctl enable-linger $(whoami)
+    ```
 
-## 2. Managing the Quay Service
+## Managing the Quay Service
 
-### Stopping Quay
-To stop all containers:
+All services are now managed by `systemd`.
+
+* **Check Status:**
+    ```bash
+    systemctl --user status quay-quay.service quay-postgres.service quay-redis.service
+    ```
+* **Stop Services:**
+    ```bash
+    systemctl --user stop quay-quay.service quay-postgres.service quay-redis.service
+    ```
+* **Start Services:**
+    ```bash
+    systemctl --user start quay-quay.service
+    ```
+
+## Full Cleanup
+
+To completely remove all containers, data, and `systemd` files, use the `uninstall.sh` script.
+
 ```bash
-podman stop quay postgresql redis
-```
-
-### Starting Quay
-To restart the environment after it has been stopped:
-```bash
-./start.sh
-```
-
-This script uses `--replace` to safely remove any old, stopped containers before starting new ones. It also performs health checks to ensure Postgres and Redis are ready before starting Quay.
-
-## 3. Full Cleanup
-
-To completely remove all containers, data, and network configuration:
-
-```bash
-# Stop all running containers (if any)
-podman stop quay postgresql redis || true
-
-# Remove the podman network
-podman network rm quay-net
-
-# Source the env file to get the $QUAY path
-source quay.env
-
-# WARNING: This permanently deletes all Quay data, images, and config
-echo "This will delete everything in $QUAY. Press Ctrl+C to cancel."
-sleep 5
-rm -rf $QUAY
+./uninstall.sh
 ```
