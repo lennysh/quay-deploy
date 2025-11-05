@@ -143,6 +143,10 @@ EOF
 
     info "Waiting 15s for dependencies to initialize..."
     sleep 15
+
+    info "Installing pg_trgm extension in Postgres..."
+    podman exec systemd-quay-postgres psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c "CREATE EXTENSION IF NOT EXISTS pg_trgm;"
+    info "Extension installed."
     
     info "PostgreSQL is running at (static) IP: $PG_IP"
     info "Redis is running at (static) IP: $REDIS_IP"
