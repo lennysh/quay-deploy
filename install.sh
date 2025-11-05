@@ -79,9 +79,9 @@ main() {
     sleep 15
     
     #
-    # --- IP ADDRESS FIX: Corrected Go template quoting ---
+    # --- IP ADDRESS FIX: Use 'index' to handle hyphens in network name ---
     #
-    PG_IP=$(podman inspect postgresql -f '{{.NetworkSettings.Networks.'$QUAY_NET'.IPAddress}}')
+    PG_IP=$(podman inspect postgresql -f '{{(index .NetworkSettings.Networks "'$QUAY_NET'").IPAddress}}')
     if [ -z "$PG_IP" ]; then
         fatal "Could not get PostgreSQL IP address on network $QUAY_NET."
     fi
@@ -104,9 +104,9 @@ main() {
     sleep 5
     
     #
-    # --- IP ADDRESS FIX: Corrected Go template quoting ---
+    # --- IP ADDRESS FIX: Use 'index' to handle hyphens in network name ---
     #
-    REDIS_IP=$(podman inspect redis -f '{{.NetworkSettings.Networks.'$QUAY_NET'.IPAddress}}')
+    REDIS_IP=$(podman inspect redis -f '{{(index .NetworkSettings.Networks "'$QUAY_NET'").IPAddress}}')
     if [ -z "$REDIS_IP" ]; then
         fatal "Could not get Redis IP address on network $QUAY_NET."
     fi
