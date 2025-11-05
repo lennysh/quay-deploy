@@ -3,7 +3,8 @@
 # This script completely UNINSTALLS and DELETES the Quay deployment,
 # including containers, systemd files, network, and all data.
 #
-# This version is more robust and handles 'systemctl --user' failures.
+# This version handles 'systemctl --user' failures and the
+# 'Permission denied' error on the postgres volume.
 #
 
 # --- Script Setup ---
@@ -35,9 +36,6 @@ main() {
     info "Starting full uninstallation of Quay..."
 
     # --- Step 1: Stop and remove running containers ---
-    # We use the 'systemd-' prefixed names we saw in 'podman ps'
-    # We use 'podman stop' because 'systemctl --user' is failing.
-    # We stop them one by one, ignoring errors (|| true).
     info "Stopping any running systemd containers..."
     podman stop systemd-quay-quay || true
     podman stop systemd-quay-postgres || true
@@ -73,8 +71,16 @@ main() {
     echo
     read -p "Press [Enter] to PERMANENTLY delete this directory (or Ctrl+C to cancel)..."
     
-    rm -rf "$QUAY"
-    info "All data deleted from $QUAY."
+    if rm -rf "$QUAY"; then
+        info "All data deleted from $QUAY."
+    else
+        echo "❌ ERROR: Failed to delete '$QUAY' due to permissions." >&2
+        echo "This is a common issue with rootless podman and database volumes." >&2
+        echo >&2
+        echo "Please run the following command manually to force deletion:" >&2
+        echo "  sudo rm -rf \"$QUAY\"" >&2
+        exit 1
+    fi
     
     echo
     echo "========================================================================"
