@@ -3,41 +3,14 @@
 # This script installs and enables a persistent, rootless Quay registry
 # using systemd Quadlet files and STATIC IPs.
 #
-# This version copies the .env file to a permanent location.
+# This version is fully idempotent and safely parses the .env file
+# without using 'source' to avoid password syntax errors.
 #
 
 # --- Script Setup ---
 set -e
 set -u
 set -o pipefail
-
-# --- Source Configuration ---
-# Find the directory where this script is located
-SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
-ENV_FILE="$SCRIPT_DIR/quay.env"
-
-if [ -f "$ENV_FILE" ]; then
-    # --- FIX: Clean the env file of invisible Windows characters ---
-    if command -v dos2unix &> /dev/null; then
-        echo "✅ INFO: Cleaning $ENV_FILE of any invisible characters..."
-        dos2unix "$ENV_FILE"
-    else
-        echo "⚠️ WARN: 'dos2unix' not found. If script fails, check for \r characters in $ENV_FILE."
-    fi
-    
-    # Sourcing the .env file to load variables
-    source "$ENV_FILE"
-    
-    # --- DEBUG: Print all loaded variables ---
-    echo "✅ INFO: Loaded the following variables from quay.env:"
-    (comm -23 <(printenv | sort) <(export -p | grep -oE '^(declare -x )?([A-Z_]+)=' | sed -E 's/^(declare -x )?|=//g' | sort) | grep -E '^(POSTGRES_|REDIS_|PG_VERSION|QUAY_)' || true)
-    echo "-----------------------------------------------------"
-    
-else
-    echo "❌ FATAL: Configuration file not found at: $ENV_FILE" >&2
-    echo "Please create quay.env in the same directory as this script." >&2
-    exit 1
-fi
 
 # --- Helper Functions ---
 info() {
@@ -48,6 +21,56 @@ fatal() {
     echo "❌ FATAL: $1" >&2
     exit 1
 }
+
+# --- Robustly Parse .env File ---
+info "Parsing configuration from quay.env..."
+SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
+ENV_FILE="$SCRIPT_DIR/quay.env"
+
+if [ ! -f "$ENV_FILE" ]; then
+    echo "❌ FATAL: Configuration file not found at: $ENV_FILE" >&2
+    echo "Please create quay.env in the same directory as this script." >&2
+    exit 1
+fi
+
+# Clean the file of invisible Windows characters, if possible
+if command -v dos2unix &> /dev/null; then
+    info "Cleaning $ENV_FILE of any invisible characters..."
+    dos2unix "$ENV_FILE" >/dev/null 2>&1
+fi
+
+# Read each variable safely, removing quotes and \r
+while IFS='=' read -r key value; do
+    # Skip comments and empty lines
+    [[ "$key" =~ ^# ]] && continue
+    [[ -z "$key" ]] && continue
+    
+    # Remove surrounding quotes and trailing carriage returns
+    value=$(echo "$value" | sed -e 's/^"//' -e 's/"$//' -e "s/^'//" -e "s/'$//" -e 's/\r$//')
+    
+    # Export the variable
+    export "$key"="$value"
+done < <(grep -E '^[A-Z_]+=' "$ENV_FILE")
+
+# --- Verify Variables ---
+info "Checking loaded variables..."
+: "${POSTGRES_DB:?FATAL: POSTGRES_DB is not set or empty in $ENV_FILE}"
+: "${POSTGRES_USER:?FATAL: POSTGRES_USER is not set or empty in $ENV_FILE}"
+: "${POSTGRES_PASSWORD:?FATAL: POSTGRES_PASSWORD is not set or empty in $ENV_FILE}"
+: "${PG_VERSION:?FATAL: PG_VERSION is not set or empty in $ENV_FILE}"
+: "${REDIS_PASS:?FATAL: REDIS_PASS is not set or empty in $ENV_FILE}"
+: "${QUAY_NET:?FATAL: QUAY_NET is not set or empty in $ENV_FILE}"
+: "${QUAY_NET_SUBNET:?FATAL: QUAY_NET_SUBNET is not set or empty in $ENV_FILE}"
+: "${PG_IP:?FATAL: PG_IP is not set or empty in $ENV_FILE}"
+: "${REDIS_IP:?FATAL: REDIS_IP is not set or empty in $ENV_FILE}"
+: "${QUAY:?FATAL: QUAY is not set or empty in $ENV_FILE}"
+
+info "All variables loaded successfully."
+
+# Get absolute path for systemd
+ABS_QUAY_DIR=$(readlink -f "$QUAY")
+# --- End Config Parsing ---
+
 
 # --- Prerequisites Check ---
 check_deps() {
@@ -68,14 +91,11 @@ main() {
     mkdir -p "$QUAY/storage"
     info "Created data and config directories."
 
-    # --- FIX: Copy .env file to a permanent location ---
+    # Copy .env file to a permanent location
     PERMANENT_ENV_FILE="$QUAY/config/quay.env"
     info "Copying $ENV_FILE to permanent location at $PERMANENT_ENV_FILE..."
     cp "$ENV_FILE" "$PERMANENT_ENV_FILE"
-    # Get the absolute path to the *new* env file
-    ABS_ENV_FILE=$(readlink -f "$PERMANENT_ENV_FILE")
-    ABS_QUAY_DIR=$(readlink -f "$QUAY")
-    # --- END FIX ---
+    ABS_ENV_FILE=$(readlink -f "$PERMANENT_ENV_FILE") # Update variable to new path
 
     info "Ensuring podman network '$QUAY_NET' exists..."
     if ! podman network exists "$QUAY_NET"; then
