@@ -136,9 +136,10 @@ IP=$REDIS_IP
 PublishPort=6379:6379
 EnvironmentFile=$ABS_ENV_FILE
 #
-# --- THE REAL FIX: Use PodmanArgs for the command, just like --privileged ---
+# --- THE REAL FIX: Use 'Exec=' for the container command ---
+# This syntax *was* correct, but was masked by other errors.
 #
-PodmanArgs=redis-server --requirepass ${REDIS_PASS}
+Exec=redis-server --requirepass \${REDIS_PASS}
 
 [Install]
 WantedBy=default.target
