@@ -11,23 +11,29 @@ set -e
 set -u
 set -o pipefail
 
+# --- Helper Functions ---
+# (MOVED TO TOP TO FIX 'command not found' ERROR)
+info() {
+    echo "✅ INFO: $1"
+}
+
+fatal() {
+    echo "❌ FATAL: $1" >&2
+    exit 1
+}
+
 # --- Source Configuration ---
 # Find the directory where this script is located
 SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
 ENV_FILE="$SCRIPT_DIR/quay.env"
 
 if [ ! -f "$ENV_FILE" ]; then
-    echo "❌ FATAL: Configuration file not found at: $ENV_FILE" >&2
-    echo "Please create quay.env in the same directory as this script." >&2
-    exit 1
+    fatal "Configuration file not found at: $ENV_FILE. Please create quay.env in the same directory as this script."
 fi
 
 info "Checking quay.env for unquoted passwords..."
 if grep -E '^(POSTGRES_PASSWORD|REDIS_PASS)=' "$ENV_FILE" | grep -v -E "='.*'" &> /dev/null; then
-    echo "❌ FATAL: Unquoted password found in $ENV_FILE." >&2
-    echo "Please edit your $ENV_FILE and wrap your POSTGRES_PASSWORD and REDIS_PASS in SINGLE QUOTES." >&2
-    echo "Example: POSTGRES_PASSWORD='your!pass@word'" >&2
-    exit 1
+    fatal "Unquoted password found in $ENV_FILE. Please edit your $ENV_FILE and wrap your POSTGRES_PASSWORD and REDIS_PASS in SINGLE QUOTES. Example: POSTGRES_PASSWORD='your!pass@word'"
 fi
 info "Password check passed."
 
