@@ -82,7 +82,6 @@ After=network-online.target
 
 [Container]
 Image=docker.io/library/postgres:$PG_VERSION
-# --- FIX: Correct Quadlet network syntax ---
 Network=$QUAY_NET
 IP=$PG_IP
 PublishPort=5432:5432
@@ -102,7 +101,6 @@ After=network-online.target
 
 [Container]
 Image=docker.io/library/redis:5.0.7
-# --- FIX: Correct Quadlet network syntax ---
 Network=$QUAY_NET
 IP=$REDIS_IP
 PublishPort=6379:6379
@@ -150,9 +148,10 @@ EOF
     echo "   --- Database Setup (USE THESE STATIC IPs) ---"
     echo "   Database Type: Postgres"
     echo "   Host:      $PG_IP"
-    echo "   User:      $PG_USER"
-    echo "   Password:  $PG_PASS"
-    echo "   Database:  $PG_DB"
+    # --- FIX: Use new variable names ---
+    echo "   User:      $POSTGRES_USER"
+    echo "   Password:  $POSTGRES_PASSWORD"
+    echo "   Database:  $POSTGRES_DB"
     echo "   (Click 'Validate Database Settings' and then 'Create Super User')"
     echo
     echo "   --- Main Config Screen (USE THESE STATIC IPs) ---"
@@ -216,7 +215,6 @@ BindsTo=quay-postgres.service quay-redis.service
 
 [Container]
 Image=quay.io/projectquay/quay:latest
-# --- FIX: Correct Quadlet network syntax ---
 Network=$QUAY_NET
 PublishPort=8080:8080
 EnvironmentFile=$ABS_ENV_FILE
