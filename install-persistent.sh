@@ -3,8 +3,7 @@
 # This script installs and enables a persistent, rootless Quay registry
 # using systemd Quadlet files and STATIC IPs.
 #
-# It creates dependencies, pauses for the manual web config,
-# and then starts and enables all services.
+# This version copies the .env file to a permanent location.
 #
 
 # --- Script Setup ---
@@ -18,12 +17,22 @@ SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
 ENV_FILE="$SCRIPT_DIR/quay.env"
 
 if [ -f "$ENV_FILE" ]; then
+    # --- FIX: Clean the env file of invisible Windows characters ---
+    if command -v dos2unix &> /dev/null; then
+        echo "✅ INFO: Cleaning $ENV_FILE of any invisible characters..."
+        dos2unix "$ENV_FILE"
+    else
+        echo "⚠️ WARN: 'dos2unix' not found. If script fails, check for \r characters in $ENV_FILE."
+    fi
+    
     # Sourcing the .env file to load variables
     source "$ENV_FILE"
-    # Get the absolute path to the env file for systemd
-    ABS_ENV_FILE=$(readlink -f "$ENV_FILE")
-    # Get the absolute path to the data directory for systemd
-    ABS_QUAY_DIR=$(readlink -f "$QUAY")
+    
+    # --- DEBUG: Print all loaded variables ---
+    echo "✅ INFO: Loaded the following variables from quay.env:"
+    (comm -23 <(printenv | sort) <(export -p | grep -oE '^(declare -x )?([A-Z_]+)=' | sed -E 's/^(declare -x )?|=//g' | sort) | grep -E '^(POSTGRES_|REDIS_|PG_VERSION|QUAY_)' || true)
+    echo "-----------------------------------------------------"
+    
 else
     echo "❌ FATAL: Configuration file not found at: $ENV_FILE" >&2
     echo "Please create quay.env in the same directory as this script." >&2
@@ -59,9 +68,17 @@ main() {
     mkdir -p "$QUAY/storage"
     info "Created data and config directories."
 
+    # --- FIX: Copy .env file to a permanent location ---
+    PERMANENT_ENV_FILE="$QUAY/config/quay.env"
+    info "Copying $ENV_FILE to permanent location at $PERMANENT_ENV_FILE..."
+    cp "$ENV_FILE" "$PERMANENT_ENV_FILE"
+    # Get the absolute path to the *new* env file
+    ABS_ENV_FILE=$(readlink -f "$PERMANENT_ENV_FILE")
+    ABS_QUAY_DIR=$(readlink -f "$QUAY")
+    # --- END FIX ---
+
     info "Ensuring podman network '$QUAY_NET' exists..."
     if ! podman network exists "$QUAY_NET"; then
-        # --- STATIC IP FIX: Create network with a defined subnet ---
         podman network create --subnet "$QUAY_NET_SUBNET" "$QUAY_NET"
         info "Network '$QUAY_NET' created with subnet $QUAY_NET_SUBNET."
     else
@@ -148,7 +165,6 @@ EOF
     echo "   --- Database Setup (USE THESE STATIC IPs) ---"
     echo "   Database Type: Postgres"
     echo "   Host:      $PG_IP"
-    # --- FIX: Use new variable names ---
     echo "   User:      $POSTGRES_USER"
     echo "   Password:  $POSTGRES_PASSWORD"
     echo "   Database:  $POSTGRES_DB"
