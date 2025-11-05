@@ -25,23 +25,29 @@ Before you begin, ensure you have the following tools installed:
 ## Installation
 
 1.  **Clone the Repository**
-    ```bash
-    git clone [https://github.com/lennysh/quay-deploy.git](https://github.com/lennysh/quay-deploy.git)
+    xyzbash
+    git clone https://github.com/lennysh/quay-deploy.git
     cd quay-deploy
-    ```
+    xyz
 
 2.  **Configure Passwords and IPs**
     Copy the example config and edit it to set your passwords. The default IPs (`10.90.0.10`, `10.90.0.11`) should be fine unless they conflict with your network.
-    ```bash
+    xyzbash
     cp quay.env.example quay.env
     nano quay.env
-    ```
-    Inside `quay.env`, replace both `REPLACEME` values for `PG_PASS` and `REDIS_PASS`.
+    xyz
+    Inside `quay.env`, replace both `REPLACEME` values for `POSTGRES_PASSWORD` and `REDIS_PASS`.
+
+    > **IMPORTANT:** Do **NOT** wrap your passwords in single or double quotes (e.g., `'mypass'`).
+    > `systemd` will treat the quotes as part of the password, and authentication will fail.
+    >
+    > **Correct:** `POSTGRES_PASSWORD=your!pass@word`
+    > **Incorrect:** `POSTGRES_PASSWORD='your!pass@word'`
 
 3.  **Make Scripts Executable**
-    ```bash
+    xyzbash
     chmod +x install-persistent.sh uninstall.sh
-    ```
+    xyz
 
 4.  **Run the Installation Script**
     This is the only script you need to run for setup. It will install and enable all persistent services.
