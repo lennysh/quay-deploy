@@ -82,8 +82,8 @@ After=network-online.target
 
 [Container]
 Image=docker.io/library/postgres:$PG_VERSION
-Network=podman:$QUAY_NET
-# --- STATIC IP FIX: Assign the static IP ---
+# --- FIX: Correct Quadlet network syntax ---
+Network=$QUAY_NET
 IP=$PG_IP
 PublishPort=5432:5432
 EnvironmentFile=$ABS_ENV_FILE
@@ -102,8 +102,8 @@ After=network-online.target
 
 [Container]
 Image=docker.io/library/redis:5.0.7
-Network=podman:$QUAY_NET
-# --- STATIC IP FIX: Assign the static IP ---
+# --- FIX: Correct Quadlet network syntax ---
+Network=$QUAY_NET
 IP=$REDIS_IP
 PublishPort=6379:6379
 EnvironmentFile=$ABS_ENV_FILE
@@ -216,7 +216,8 @@ BindsTo=quay-postgres.service quay-redis.service
 
 [Container]
 Image=quay.io/projectquay/quay:latest
-Network=podman:$QUAY_NET
+# --- FIX: Correct Quadlet network syntax ---
+Network=$QUAY_NET
 PublishPort=8080:8080
 EnvironmentFile=$ABS_ENV_FILE
 Volume=$ABS_QUAY_DIR/config:/conf/stack:Z
