@@ -3,8 +3,7 @@
 # This script installs and enables a persistent, rootless Quay registry
 # using systemd Quadlet files and STATIC IPs.
 #
-# This version is fully idempotent and safely parses the .env file
-# without using 'source' to avoid password syntax errors.
+# This version fixes all known .env and systemd path issues.
 #
 
 # --- Script Setup ---
@@ -12,18 +11,8 @@ set -e
 set -u
 set -o pipefail
 
-# --- Helper Functions ---
-info() {
-    echo "✅ INFO: $1"
-}
-
-fatal() {
-    echo "❌ FATAL: $1" >&2
-    exit 1
-}
-
-# --- Robustly Parse .env File ---
-info "Parsing configuration from quay.env..."
+# --- Source Configuration ---
+# Find the directory where this script is located
 SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
 ENV_FILE="$SCRIPT_DIR/quay.env"
 
@@ -33,26 +22,26 @@ if [ ! -f "$ENV_FILE" ]; then
     exit 1
 fi
 
+info "Checking quay.env for unquoted passwords..."
+if grep -E '^(POSTGRES_PASSWORD|REDIS_PASS)=' "$ENV_FILE" | grep -v -E "='.*'" &> /dev/null; then
+    echo "❌ FATAL: Unquoted password found in $ENV_FILE." >&2
+    echo "Please edit your $ENV_FILE and wrap your POSTGRES_PASSWORD and REDIS_PASS in SINGLE QUOTES." >&2
+    echo "Example: POSTGRES_PASSWORD='your!pass@word'" >&2
+    exit 1
+fi
+info "Password check passed."
+
 # Clean the file of invisible Windows characters, if possible
 if command -v dos2unix &> /dev/null; then
     info "Cleaning $ENV_FILE of any invisible characters..."
     dos2unix "$ENV_FILE" >/dev/null 2>&1
 fi
 
-# Read each variable safely, removing quotes and \r
-while IFS='=' read -r key value; do
-    # Skip comments and empty lines
-    [[ "$key" =~ ^# ]] && continue
-    [[ -z "$key" ]] && continue
-    
-    # Remove surrounding quotes and trailing carriage returns
-    value=$(echo "$value" | sed -e 's/^"//' -e 's/"$//' -e "s/^'//" -e "s/'$//" -e 's/\r$//')
-    
-    # Export the variable
-    export "$key"="$value"
-done < <(grep -E '^[A-Z_]+=' "$ENV_FILE")
+# We can now safely source the file
+info "Loading configuration from $ENV_FILE..."
+source "$ENV_FILE"
 
-# --- Verify Variables ---
+# --- Verify Variables (this time it will work) ---
 info "Checking loaded variables..."
 : "${POSTGRES_DB:?FATAL: POSTGRES_DB is not set or empty in $ENV_FILE}"
 : "${POSTGRES_USER:?FATAL: POSTGRES_USER is not set or empty in $ENV_FILE}"
@@ -64,7 +53,6 @@ info "Checking loaded variables..."
 : "${PG_IP:?FATAL: PG_IP is not set or empty in $ENV_FILE}"
 : "${REDIS_IP:?FATAL: REDIS_IP is not set or empty in $ENV_FILE}"
 : "${QUAY:?FATAL: QUAY is not set or empty in $ENV_FILE}"
-
 info "All variables loaded successfully."
 
 # Get absolute path for systemd
