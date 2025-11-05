@@ -30,18 +30,6 @@ if [ ! -f "$ENV_FILE" ]; then
     fatal "Configuration file not found at: $ENV_FILE. Please create quay.env in the same directory as this script."
 fi
 
-info "Checking quay.env for unquoted passwords..."
-if grep -E '^(POSTGRES_PASSWORD|REDIS_PASS)=' "$ENV_FILE" | grep -v -E "='.*'" &> /dev/null; then
-    fatal "Unquoted password found in $ENV_FILE. Please edit your $ENV_FILE and wrap your POSTGRES_PASSWORD and REDIS_PASS in SINGLE QUOTES. Example: POSTGRES_PASSWORD='your!pass@word'"
-fi
-info "Password check passed."
-
-# Clean the file of invisible Windows characters, if possible
-if command -v dos2unix &> /dev/null; then
-    info "Cleaning $ENV_FILE of any invisible characters..."
-    dos2unix "$ENV_FILE" >/dev/null 2>&1
-fi
-
 # We can now safely source the file
 info "Loading configuration from $ENV_FILE..."
 source "$ENV_FILE"
@@ -139,7 +127,7 @@ EnvironmentFile=$ABS_ENV_FILE
 # --- THE REAL FIX: Use 'Exec=' for the container command ---
 # This syntax *was* correct, but was masked by other errors.
 #
-Exec=redis-server --requirepass \${REDIS_PASS}
+Exec=redis-server --requirepass ${REDIS_PASS}
 
 [Install]
 WantedBy=default.target
