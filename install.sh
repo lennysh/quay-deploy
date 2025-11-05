@@ -78,8 +78,10 @@ main() {
     info "Waiting 15s for PostgreSQL to initialize..."
     sleep 15
     
-    # --- IP ADDRESS FIX ---
-    PG_IP=$(podman inspect postgresql -f "{{.NetworkSettings.Networks.\"$QUAY_NET\".IPAddress}}")
+    #
+    # --- IP ADDRESS FIX: Corrected Go template quoting ---
+    #
+    PG_IP=$(podman inspect postgresql -f '{{.NetworkSettings.Networks.'$QUAY_NET'.IPAddress}}')
     if [ -z "$PG_IP" ]; then
         fatal "Could not get PostgreSQL IP address on network $QUAY_NET."
     fi
@@ -91,6 +93,7 @@ main() {
     podman exec -it postgresql /bin/bash -c "echo \"CREATE EXTENSION IF NOT EXISTS pg_trgm\" | psql -d $PG_DB -U ${PG_USER}"
 
     info "Starting Redis container on '$QUAY_NET'..."
+    # Note: We run the command *inside* the podman run command
     podman run -d --rm --name redis \
         --network "$QUAY_NET" \
         -p 6379:6379 \
@@ -100,8 +103,10 @@ main() {
     info "Waiting 5s for Redis to initialize..."
     sleep 5
     
-    # --- IP ADDRESS FIX ---
-    REDIS_IP=$(podman inspect redis -f "{{.NetworkSettings.Networks.\"$QUAY_NET\".IPAddress}}")
+    #
+    # --- IP ADDRESS FIX: Corrected Go template quoting ---
+    #
+    REDIS_IP=$(podman inspect redis -f '{{.NetworkSettings.Networks.'$QUAY_NET'.IPAddress}}')
     if [ -z "$REDIS_IP" ]; then
         fatal "Could not get Redis IP address on network $QUAY_NET."
     fi
@@ -129,6 +134,7 @@ main() {
     echo "4. Click 'Start New Registry Setup' and use these exact values:"
     echo
     echo "   --- Database Setup (USE THESE IPs) ---"
+    echo "   (This will fix the 'Database' connection error)"
     echo "   Database Type: Postgres"
     echo "   Host:      $PG_IP"
     echo "   User:      $PG_USER"
@@ -137,6 +143,7 @@ main() {
     echo "   (Click 'Validate Database Settings' and then 'Create Super User')"
     echo
     echo "   --- Main Config Screen (USE THESE IPs) ---"
+    echo "   (This will fix both 'BUILDLOGS_REDIS' and 'USER_EVENTS_REDIS' errors)"
     echo "   Server Hostname: localhost:8080"
     echo "   TLS:             None (Not for Production)"
     echo "   Redis Hostname:  $REDIS_IP"
@@ -230,9 +237,7 @@ main() {
     echo "When you are finished, run these commands to stop containers and remove all data:"
     echo
     echo "   podman stop quay postgresql redis"
-    echo "   podman network rm $QUAY_NET"
-    echo "   echo \"WARNING: This next command will permanently delete all Quay data:\""
-    echo "   echo \"rm -rf $QUAY\""
+    echo "   ./uninstall.sh"
     echo
 }
 
