@@ -1,7 +1,7 @@
 #!/bin/bash
 #
 # This script installs and enables a persistent, rootless Quay registry
-# using systemd Quadlet files.
+# using systemd Quadlet files and STATIC IPs.
 #
 # It creates dependencies, pauses for the manual web config,
 # and then starts and enables all services.
@@ -61,8 +61,9 @@ main() {
 
     info "Ensuring podman network '$QUAY_NET' exists..."
     if ! podman network exists "$QUAY_NET"; then
-        podman network create "$QUAY_NET"
-        info "Network '$QUAY_NET' created."
+        # --- STATIC IP FIX: Create network with a defined subnet ---
+        podman network create --subnet "$QUAY_NET_SUBNET" "$QUAY_NET"
+        info "Network '$QUAY_NET' created with subnet $QUAY_NET_SUBNET."
     else
         info "Network '$QUAY_NET' already exists."
     fi
@@ -82,6 +83,8 @@ After=network-online.target
 [Container]
 Image=docker.io/library/postgres:$PG_VERSION
 Network=podman:$QUAY_NET
+# --- STATIC IP FIX: Assign the static IP ---
+IP=$PG_IP
 PublishPort=5432:5432
 EnvironmentFile=$ABS_ENV_FILE
 Volume=$ABS_QUAY_DIR/postgres:/var/lib/postgresql/data:Z
@@ -100,6 +103,8 @@ After=network-online.target
 [Container]
 Image=docker.io/library/redis:5.0.7
 Network=podman:$QUAY_NET
+# --- STATIC IP FIX: Assign the static IP ---
+IP=$REDIS_IP
 PublishPort=6379:6379
 EnvironmentFile=$ABS_ENV_FILE
 Exec=redis-server --requirepass \${REDIS_PASS}
@@ -118,6 +123,10 @@ EOF
 
     info "Waiting 15s for dependencies to initialize..."
     sleep 15
+    
+    info "PostgreSQL is running at (static) IP: $PG_IP"
+    info "Redis is running at (static) IP: $REDIS_IP"
+
 
     # --- Part 3: Manual Configuration ---
     CONFIG_FILE_PATH="$QUAY/config/quay-config.tar.gz"
@@ -128,7 +137,7 @@ EOF
     echo "========================================================================"
     echo
     echo "The persistent 'postgres' and 'redis' services are now running."
-    echo "You must now generate the 'config.yaml' using hostnames."
+    echo "You must now generate the 'config.yaml' using the STATIC IPs."
     echo
     echo "1. Run the following command in a SEPARATE terminal:"
     echo
@@ -138,18 +147,18 @@ EOF
     echo "3. Log in with credentials: quayconfig / secret"
     echo "4. Click 'Start New Registry Setup' and use these exact values:"
     echo
-    echo "   --- Database Setup (USE HOSTNAMES) ---"
+    echo "   --- Database Setup (USE THESE STATIC IPs) ---"
     echo "   Database Type: Postgres"
-    echo "   Host:      postgresql"
+    echo "   Host:      $PG_IP"
     echo "   User:      $PG_USER"
     echo "   Password:  $PG_PASS"
     echo "   Database:  $PG_DB"
     echo "   (Click 'Validate Database Settings' and then 'Create Super User')"
     echo
-    echo "   --- Main Config Screen (USE HOSTNAMES) ---"
+    echo "   --- Main Config Screen (USE THESE STATIC IPs) ---"
     echo "   Server Hostname: localhost:8080"
     echo "   TLS:             None (Not for Production)"
-    echo "   Redis Hostname:  redis"
+    echo "   Redis Hostname:  $REDIS_IP"
     echo "   Redis Password:  $REDIS_PASS"
     echo
     echo "5. Click 'Save Configuration Changes' at the bottom."
