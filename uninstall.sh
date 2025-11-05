@@ -3,8 +3,8 @@
 # This script completely UNINSTALLS and DELETES the Quay deployment,
 # including containers, systemd files, network, and all data.
 #
-# This version handles 'systemctl --user' failures and the
-# 'Permission denied' error on the postgres volume.
+# This version uses a privileged container to fix volume
+# permissions, avoiding the need for 'sudo'.
 #
 
 # --- Script Setup ---
@@ -71,16 +71,21 @@ main() {
     echo
     read -p "Press [Enter] to PERMANENTLY delete this directory (or Ctrl+C to cancel)..."
     
-    if rm -rf "$QUAY"; then
-        info "All data deleted from $QUAY."
-    else
-        echo "❌ ERROR: Failed to delete '$QUAY' due to permissions." >&2
-        echo "This is a common issue with rootless podman and database volumes." >&2
-        echo >&2
-        echo "Please run the following command manually to force deletion:" >&2
-        echo "  sudo rm -rf \"$QUAY\"" >&2
-        exit 1
-    fi
+    info "Using a root container to clean up volume permissions..."
+    # Get the parent directory and the name of the directory to delete
+    PARENT_DIR=$(dirname "$QUAY")
+    QUAY_NAME=$(basename "$QUAY")
+    
+    # Run a busybox container as root (-u 0)
+    # Mount the PARENT directory to /data
+    # Tell it to remove the /data/QUAY_NAME directory
+    podman run --rm --quiet \
+      -v "$PARENT_DIR:/data:Z" \
+      -u 0 \
+      docker.io/library/busybox:latest \
+      rm -rf "/data/$QUAY_NAME"
+    
+    info "All data deleted from $QUAY."
     
     echo
     echo "========================================================================"

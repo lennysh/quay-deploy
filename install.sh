@@ -73,26 +73,40 @@ main() {
         -e POSTGRES_DB=$PG_DB \
         -p 5432:5432 \
         -v "$QUAY/postgres:/var/lib/postgresql/data:Z" \
-        "postgres:$PG_VERSION"
+        "docker.io/library/postgres:$PG_VERSION"
 
     info "Waiting 15s for PostgreSQL to initialize..."
     sleep 15
+    
+    # --- IP ADDRESS FIX ---
+    PG_IP=$(podman inspect postgresql -f "{{.NetworkSettings.Networks.\"$QUAY_NET\".IPAddress}}")
+    if [ -z "$PG_IP" ]; then
+        fatal "Could not get PostgreSQL IP address on network $QUAY_NET."
+    fi
+    info "PostgreSQL is running at IP: $PG_IP"
+    # --- END FIX ---
+
 
     info "Enabling 'pg_trgm' extension in PostgreSQL..."
     podman exec -it postgresql /bin/bash -c "echo \"CREATE EXTENSION IF NOT EXISTS pg_trgm\" | psql -d $PG_DB -U ${PG_USER}"
-
-    info "PostgreSQL is running. Hostname for other containers: 'postgresql'"
 
     info "Starting Redis container on '$QUAY_NET'..."
     podman run -d --rm --name redis \
         --network "$QUAY_NET" \
         -p 6379:6379 \
-        redis:5.0.7 \
-        --requirepass $REDIS_PASS
+        "docker.io/library/redis:5.0.7" \
+        redis-server --requirepass $REDIS_PASS
 
     info "Waiting 5s for Redis to initialize..."
     sleep 5
-    info "Redis is running. Hostname for other containers: 'redis'"
+    
+    # --- IP ADDRESS FIX ---
+    REDIS_IP=$(podman inspect redis -f "{{.NetworkSettings.Networks.\"$QUAY_NET\".IPAddress}}")
+    if [ -z "$REDIS_IP" ]; then
+        fatal "Could not get Redis IP address on network $QUAY_NET."
+    fi
+    info "Redis is running at IP: $REDIS_IP"
+    # --- END FIX ---
 
 
     # --- Part 2: Manual Configuration ---
@@ -114,18 +128,18 @@ main() {
     echo "3. Log in with credentials: quayconfig / secret"
     echo "4. Click 'Start New Registry Setup' and use these exact values:"
     echo
-    echo "   --- Database Setup ---"
+    echo "   --- Database Setup (USE THESE IPs) ---"
     echo "   Database Type: Postgres"
-    echo "   Host:      postgresql"
+    echo "   Host:      $PG_IP"
     echo "   User:      $PG_USER"
     echo "   Password:  $PG_PASS"
     echo "   Database:  $PG_DB"
     echo "   (Click 'Validate Database Settings' and then 'Create Super User')"
     echo
-    echo "   --- Main Config Screen ---"
+    echo "   --- Main Config Screen (USE THESE IPs) ---"
     echo "   Server Hostname: localhost:8080"
     echo "   TLS:             None (Not for Production)"
-    echo "   Redis Hostname:  redis"
+    echo "   Redis Hostname:  $REDIS_IP"
     echo "   Redis Password:  $REDIS_PASS"
     echo
     echo "5. Click 'Save Configuration Changes' at the bottom."
@@ -191,8 +205,6 @@ main() {
 
     info "Waiting 10s for Quay to start..."
     sleep 10
-
-    # ... (Rest of the script is the same) ...
     
     # --- Part 4: Success and Test Commands ---
     echo
