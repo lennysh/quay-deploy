@@ -12,7 +12,6 @@ set -u
 set -o pipefail
 
 # --- Helper Functions ---
-# (MOVED TO TOP TO FIX 'command not found' ERROR)
 info() {
     echo "✅ INFO: $1"
 }
@@ -131,12 +130,13 @@ Wants=network-online.target
 After=network-online.target
 
 [Container]
-Image=docker.io/library/redis:5.0.7
+# --- FIX: Append command to Image= key, and expand variable NOW ---
+Image=docker.io/library/redis:5.0.7 redis-server --requirepass ${REDIS_PASS}
 Network=$QUAY_NET
 IP=$REDIS_IP
 PublishPort=6379:6379
+# We still need the env file for the ${REDIS_PASS} variable
 EnvironmentFile=$ABS_ENV_FILE
-Exec=redis-server --requirepass \${REDIS_PASS}
 
 [Install]
 WantedBy=default.target
@@ -180,7 +180,7 @@ EOF
     echo "   Database Type: Postgres"
     echo "   Host:      $PG_IP"
     echo "   User:      $POSTGRES_USER"
-    echo "   Password:  $POSTGRES_PASSWORD"
+    echo "   Password:  $POSTGRES_PASSWORD (MUST MATCH quay.env)"
     echo "   Database:  $POSTGRES_DB"
     echo "   (Click 'Validate Database Settings' and then 'Create Super User')"
     echo
@@ -188,7 +188,7 @@ EOF
     echo "   Server Hostname: localhost:8080"
     echo "   TLS:             None (Not for Production)"
     echo "   Redis Hostname:  $REDIS_IP"
-    echo "   Redis Password:  $REDIS_PASS"
+    echo "   Redis Password:  $REDIS_PASS (MUST MATCH quay.env)"
     echo
     echo "5. Click 'Save Configuration Changes' at the bottom."
     echo "6. On the next screen, click 'Download Configuration'."
