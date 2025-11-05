@@ -130,13 +130,15 @@ Wants=network-online.target
 After=network-online.target
 
 [Container]
-# --- FIX: Add single-quotes around the expanded password ---
-Image=docker.io/library/redis:5.0.7 redis-server --requirepass '${REDIS_PASS}'
+Image=docker.io/library/redis:5.0.7
 Network=$QUAY_NET
 IP=$REDIS_IP
 PublishPort=6379:6379
-# We no longer need the EnvironmentFile key for this container
-# EnvironmentFile=$ABS_ENV_FILE
+EnvironmentFile=$ABS_ENV_FILE
+#
+# --- THE REAL FIX: Use PodmanArgs for the command, just like --privileged ---
+#
+PodmanArgs=redis-server --requirepass ${REDIS_PASS}
 
 [Install]
 WantedBy=default.target
