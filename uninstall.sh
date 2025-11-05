@@ -3,6 +3,8 @@
 # This script completely UNINSTALLS and DELETES the Quay deployment,
 # including containers, systemd files, network, and all data.
 #
+# This version is more robust and handles 'systemctl --user' failures.
+#
 
 # --- Script Setup ---
 set -e
@@ -34,25 +36,29 @@ main() {
 
     # --- Step 1: Stop and remove running containers ---
     # We use the 'systemd-' prefixed names we saw in 'podman ps'
-    # We use 'podman stop' because 'systemctl --user' is not working
+    # We use 'podman stop' because 'systemctl --user' is failing.
+    # We stop them one by one, ignoring errors (|| true).
     info "Stopping any running systemd containers..."
-    podman stop systemd-quay-quay systemd-quay-postgres systemd-quay-redis || true
-    
-    # The containers are auto-removed because the Quadlet files imply --rm
-    info "Containers stopped."
+    podman stop systemd-quay-quay || true
+    podman stop systemd-quay-postgres || true
+    podman stop systemd-quay-redis || true
+    info "All containers stopped."
 
     # --- Step 2: Remove Quadlet .container files ---
     SERVICE_DIR="$HOME/.config/containers/systemd"
-    info "Removing Quadlet files from $SERVICE_DIR..."
-    rm -f "$SERVICE_DIR/quay-quay.container"
-    rm -f "$SERVICE_DIR/quay-postgres.container"
-    rm -f "$SERVICE_DIR/quay-redis.container"
-    info "Quadlet files removed."
+    if [ -d "$SERVICE_DIR" ]; then
+        info "Removing Quadlet files from $SERVICE_DIR..."
+        rm -f "$SERVICE_DIR/quay-quay.container"
+        rm -f "$SERVICE_DIR/quay-postgres.container"
+        rm -f "$SERVICE_DIR/quay-redis.container"
+        info "Quadlet files removed."
+    else
+        info "Quadlet directory not found, skipping."
+    fi
 
     # --- Step 3: Reload systemd daemon ---
-    # This may fail with 'No medium found', but that's okay.
-    # We must try, so it unloads the services.
-    info "Reloading systemd user daemon (this may fail, it is safe to ignore)..."
+    info "Attempting to reload systemd user daemon..."
+    info "(It is 100% SAFE to ignore 'Failed to connect to bus' here.)"
     systemctl --user daemon-reload || true
     info "Systemd reload attempted."
 
